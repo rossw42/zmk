@@ -21,6 +21,7 @@
 #include <zmk/hid.h>
 #include <zmk/matrix.h>
 #include <zmk/keymap.h>
+#include <zmk/physical_layouts.h>
 #include <zmk/virtual_key_position.h>
 
 LOG_MODULE_DECLARE(zmk, CONFIG_ZMK_LOG_LEVEL);
@@ -137,14 +138,58 @@ static void store_last_tapped(int64_t timestamp) {
 
 // Store the combo key pointer in the combos array, one pointer for each key position
 // The combos are sorted shortest-first, then by virtual-key-position.
-static int initialize_combo(size_t index) {
+//
+// Combo `key-positions` are expressed in terms of the stock/chosen physical layout, but the
+// position events we match against are expressed in terms of the currently *selected* physical
+// layout. The two only coincide for the stock layout, so we build the lookup table by walking the
+// selected-to-stock position map: for each selected position `s` that maps to a stock position
+// used by the combo, set the combo's bit for `s`. Combos whose keys are not all reachable from the
+// selected layout end up with no bits set and are therefore inactive on that layout.
+static int initialize_combo(size_t index, const uint32_t *pos_map, size_t pos_map_len) {
     const struct combo_cfg *new_combo = &combos[index];
 
     for (size_t kp = 0; kp < new_combo->key_position_len; kp++) {
-        sys_bitfield_set_bit((mem_addr_t)&combo_lookup[new_combo->key_positions[kp]], index);
+        const uint32_t stock_pos = (uint32_t)new_combo->key_positions[kp];
+        bool mapped = false;
+
+        for (size_t selected_pos = 0; selected_pos < pos_map_len; selected_pos++) {
+            if (pos_map[selected_pos] == stock_pos) {
+                sys_bitfield_set_bit((mem_addr_t)&combo_lookup[selected_pos], index);
+                mapped = true;
+                break;
+            }
+        }
+
+        if (!mapped) {
+            LOG_DBG("Combo %d key position %d is not present in the selected layout; combo is "
+                    "inactive",
+                    index, stock_pos);
+            // Any bits already set for earlier positions of this combo must be cleared, otherwise
+            // a subset of the keys could still form a (now unreachable) candidate.
+            for (size_t selected_pos = 0; selected_pos < pos_map_len; selected_pos++) {
+                sys_bitfield_clear_bit((mem_addr_t)&combo_lookup[selected_pos], index);
+            }
+            return -ENODEV;
+        }
     }
 
     return 0;
+}
+
+static void rebuild_combo_lookup(void) {
+    const uint32_t *pos_map;
+    int pos_map_len = zmk_physical_layouts_get_selected_to_stock_position_map(&pos_map);
+
+    if (pos_map_len < 0) {
+        LOG_WRN("Failed to get the position map (%d), combos will not be updated", pos_map_len);
+        return;
+    }
+
+    memset(combo_lookup, 0, sizeof(combo_lookup));
+
+    for (int i = 0; i < ARRAY_SIZE(combos); i++) {
+        initialize_combo(i, pos_map, MIN((size_t)pos_map_len, (size_t)ZMK_KEYMAP_LEN));
+    }
 }
 
 static bool combo_active_on_layer(const struct combo_cfg *combo, uint8_t layer) {
@@ -527,12 +572,29 @@ static int combo_init(void) {
 
     k_work_init_delayable(&timeout_task, combo_timeout_handler);
     LOG_WRN("Have %d combos!", ARRAY_SIZE(combos));
-    for (int i = 0; i < ARRAY_SIZE(combos); i++) {
-        initialize_combo(i);
-    }
+    rebuild_combo_lookup();
     return 0;
 }
 
-SYS_INIT(combo_init, APPLICATION, CONFIG_KERNEL_INIT_PRIORITY_DEFAULT);
+// Must run after `zmk_physical_layouts_init` (CONFIG_APPLICATION_INIT_PRIORITY) so the
+// selected-to-stock position map has been initialised before we build the lookup from it. A layout
+// persisted in settings is applied later still, from `settings_load()` in `main()`, which raises
+// `zmk_physical_layout_selection_changed` and is handled by the listener below.
+SYS_INIT(combo_init, APPLICATION, CONFIG_APPLICATION_INIT_PRIORITY + 1);
+
+static int combo_layout_listener(const zmk_event_t *eh) {
+    if (as_zmk_physical_layout_selection_changed(eh) != NULL) {
+        // Selecting a layout changes which selected positions map to the stock positions our combos
+        // are defined against, so the lookup has to be rebuilt. Drop any in-flight candidates
+        // first; they were computed against the old mapping.
+        cleanup();
+        rebuild_combo_lookup();
+    }
+
+    return ZMK_EV_EVENT_BUBBLE;
+}
+
+ZMK_LISTENER(combo_layout, combo_layout_listener);
+ZMK_SUBSCRIPTION(combo_layout, zmk_physical_layout_selection_changed);
 
 #endif

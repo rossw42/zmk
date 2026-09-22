@@ -1,0 +1,30 @@
+#include "../behavior_keymap.dtsi"
+
+/*
+ * Regression test for zmkfirmware/zmk#3228: a combo that uses a key which is *not* present in the
+ * selected alternate layout must be disabled, rather than naively re-interpreting its stock
+ * position numbers against the alternate layout.
+ *
+ * Stock positions 0+1 are the combo. In the alt layout, position 1 is the physical key RC(1,0),
+ * so a naive implementation would fire the combo for RC(0,0)+RC(1,0). It must not.
+ */
+&kscan {
+    events = <
+        /* Stock layout: RC(0,0)+RC(0,1) -> combo fires (C) */
+        ZMK_MOCK_PRESS(0,0,10)
+        ZMK_MOCK_PRESS(0,1,10)
+        ZMK_MOCK_RELEASE(0,0,10)
+        ZMK_MOCK_RELEASE(0,1,10)
+
+        /* Switch to the alt layout via RC(1,1) */
+        ZMK_MOCK_PRESS(1,1,10)
+        ZMK_MOCK_RELEASE(1,1,100)
+
+        /* Alt layout: RC(0,0)+RC(1,0) are alt positions 0+1. The combo must NOT fire; the keys
+         * must pass through as plain A and D presses. */
+        ZMK_MOCK_PRESS(0,0,10)
+        ZMK_MOCK_PRESS(1,0,10)
+        ZMK_MOCK_RELEASE(0,0,10)
+        ZMK_MOCK_RELEASE(1,0,10)
+    >;
+};

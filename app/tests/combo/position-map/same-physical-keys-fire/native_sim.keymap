@@ -1,0 +1,26 @@
+#include "../behavior_keymap.dtsi"
+
+/*
+ * Regression test for zmkfirmware/zmk#3228: combos defined against the stock layout must keep
+ * firing on the same *physical* keys after an alternate physical layout is selected.
+ */
+&kscan {
+    events = <
+        /* Stock layout: top row RC(0,0)+RC(0,1) is positions 0+1 -> combo fires (C) */
+        ZMK_MOCK_PRESS(0,0,10)
+        ZMK_MOCK_PRESS(0,1,10)
+        ZMK_MOCK_RELEASE(0,0,10)
+        ZMK_MOCK_RELEASE(0,1,10)
+
+        /* Switch to the alt layout via RC(1,1), which is &select_layout 1 in the stock layout */
+        ZMK_MOCK_PRESS(1,1,10)
+        ZMK_MOCK_RELEASE(1,1,100)
+
+        /* Alt layout: the same physical top row is now positions 2+3, but the combo is defined
+         * in stock positions 0+1. With the position map applied it must still fire (C). */
+        ZMK_MOCK_PRESS(0,0,10)
+        ZMK_MOCK_PRESS(0,1,10)
+        ZMK_MOCK_RELEASE(0,0,10)
+        ZMK_MOCK_RELEASE(0,1,10)
+    >;
+};

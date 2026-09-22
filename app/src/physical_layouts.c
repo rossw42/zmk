@@ -493,7 +493,11 @@ int zmk_physical_layouts_get_position_map(uint8_t source, uint8_t dest, size_t m
         return -EINVAL;
     }
 
-    memset(map, UINT32_MAX, map_size);
+    // Mark every entry as unmapped first. Callers rely on entries the loop below does not fill in
+    // (positions that have no counterpart in the source layout) reading as UINT32_MAX.
+    for (int i = 0; i < map_size; i++) {
+        map[i] = UINT32_MAX;
+    }
 
     for (int b = 0; b < max_kp; b++) {
         bool found = false;

@@ -1,0 +1,104 @@
+#include <dt-bindings/zmk/keys.h>
+#include <behaviors.dtsi>
+#include <dt-bindings/zmk/kscan_mock.h>
+#include <dt-bindings/zmk/matrix_transform.h>
+
+/*
+ * Two physical layouts sharing the 2x2 mock kscan. The alternate layout swaps the rows, so a given
+ * *physical* key has a different position number in each layout. The position map records which
+ * positions correspond to the same physical key.
+ *
+ *   physical key  stock position  alt position
+ *   RC(0,0)             0             2
+ *   RC(0,1)             1             3
+ *   RC(1,0)             2             0
+ *   RC(1,1)             3             1
+ */
+
+/ {
+    chosen {
+        /delete-property/ zmk,kscan;
+        zmk,physical-layout = &stock_layout;
+    };
+
+    stock_transform: stock_transform {
+        compatible = "zmk,matrix-transform";
+        columns = <2>;
+        rows = <2>;
+        map = <RC(0,0) RC(0,1) RC(1,0) RC(1,1)>;
+    };
+
+    alt_transform: alt_transform {
+        compatible = "zmk,matrix-transform";
+        columns = <2>;
+        rows = <2>;
+        map = <RC(1,0) RC(1,1) RC(0,0) RC(0,1)>;
+    };
+
+    stock_layout: stock_layout {
+        compatible = "zmk,physical-layout";
+        display-name = "Stock";
+        kscan = <&kscan>;
+        transform = <&stock_transform>;
+    };
+
+    alt_layout: alt_layout {
+        compatible = "zmk,physical-layout";
+        display-name = "Alt";
+        kscan = <&kscan>;
+        transform = <&alt_transform>;
+    };
+
+    position_map {
+        compatible = "zmk,physical-layout-position-map";
+        complete;
+
+        stock {
+            physical-layout = <&stock_layout>;
+            positions = <0 1 2 3>;
+        };
+
+        alt {
+            physical-layout = <&alt_layout>;
+            positions = <2 3 0 1>;
+        };
+    };
+
+    behaviors {
+        select_layout: select_layout {
+            compatible = "zmk,behavior-select-physical-layout";
+            #binding-cells = <1>;
+        };
+    };
+
+    combos {
+        compatible = "zmk,combos";
+
+        // Defined against the stock layout: the top row, i.e. the physical keys RC(0,0) + RC(0,1).
+        combo_top_row {
+            timeout-ms = <30>;
+            key-positions = <0 1>;
+            bindings = <&kp C>;
+        };
+    };
+
+    keymap {
+        compatible = "zmk,keymap";
+
+        /*
+         * Positions are stock-layout positions:
+         *   0: RC(0,0) &kp A     1: RC(0,1) &kp B
+         *   2: RC(1,0) &none     3: RC(1,1) &select_layout 1
+         *
+         * The layout is switched while RC(1,1) is held, so its *release* arrives as alt position 1.
+         * The keymap resolves bindings through the selected-to-stock position map, and alt position
+         * 1 maps back to stock position 3, so the release still reaches &select_layout.
+         */
+        default_layer {
+            bindings = <
+                &kp A &kp B
+                &none &select_layout 1
+            >;
+        };
+    };
+};

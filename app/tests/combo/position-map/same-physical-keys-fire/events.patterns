@@ -1,0 +1,2 @@
+s/.*on_select_physical_layout_binding_pressed/select_layout/p
+s/.*hid_listener_keycode_//p
