@@ -1,0 +1,3 @@
+# nanopb options for combos.proto. `@CONFIG_...@` placeholders are substituted from Kconfig by the
+# ZMK build (see app/CMakeLists.txt, which does the same for keymap.options.in).
+zmk.combos.Combo.key_positions max_count:@CONFIG_ZMK_COMBO_MAX_KEYS_PER_COMBO_STUDIO@

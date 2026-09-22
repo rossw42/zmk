@@ -1,0 +1,111 @@
+syntax = "proto3";
+
+package zmk.combos;
+
+import "keymap.proto";
+
+// Runtime combo management for ZMK Studio.
+//
+// Combos live in a fixed set of slots decided at build time. The first N slots are populated from
+// devicetree ("stock" combos); the remaining slots come from combo nodes marked
+// `status = "reserved"` and start out empty. Stock combos can be edited but not cleared; reserved
+// slots can be filled, edited and cleared. Key positions are always expressed in terms of the
+// stock/chosen physical layout, exactly like devicetree `key-positions`.
+
+message Request {
+    oneof request_type {
+        bool get_combos = 1;
+        SetComboRequest set_combo = 2;
+        ClearComboRequest clear_combo = 3;
+    }
+}
+
+message Response {
+    oneof response_type {
+        GetCombosResponse get_combos = 1;
+        SetComboResponse set_combo = 2;
+        ClearComboResponse clear_combo = 3;
+    }
+}
+
+message Notification {
+    oneof notification_type {
+        // Mirrors zmk.keymap.Notification.unsaved_changes_status_changed so the client can drive a
+        // single "unsaved changes" indicator regardless of which subsystem was edited.
+        bool unsaved_changes_status_changed = 1;
+    }
+}
+
+message Combo {
+    // Stock-layout key positions that must all be pressed. Length is 2..max_keys_per_combo.
+    repeated uint32 key_positions = 1;
+    zmk.keymap.BehaviorBinding binding = 2;
+    // Milliseconds all keys must be pressed within. 0 = firmware default (50).
+    uint32 timeout_ms = 3;
+    // Milliseconds of idle required after the last non-combo, non-modifier tap. 0 = disabled.
+    uint32 require_prior_idle_ms = 4;
+    // Bitmask of layer IDs (bit n = layer id n) the combo is active on. 0 = all layers.
+    uint32 layer_mask = 5;
+    // Release the combo when the *last* key is released instead of the first.
+    bool slow_release = 6;
+}
+
+message ComboSlot {
+    uint32 index = 1;
+    // False for reserved slots that have not been filled yet.
+    bool populated = 2;
+    // True for combos that originate from devicetree and can therefore not be cleared.
+    bool stock = 3;
+    Combo combo = 4;
+}
+
+message GetCombosResponse {
+    repeated ComboSlot slots = 1;
+    // Longest key_positions list a slot can hold, decided at build time.
+    uint32 max_keys_per_combo = 2;
+    // Number of reserved slots that are currently unpopulated.
+    uint32 available_slots = 3;
+}
+
+message SetComboRequest {
+    uint32 index = 1;
+    Combo combo = 2;
+}
+
+enum SetComboErrorCode {
+    SET_COMBO_ERR_OK = 0;
+    SET_COMBO_ERR_GENERIC = 1;
+    SET_COMBO_ERR_INVALID_INDEX = 2;
+    SET_COMBO_ERR_TOO_FEW_KEYS = 3;
+    SET_COMBO_ERR_TOO_MANY_KEYS = 4;
+    SET_COMBO_ERR_INVALID_KEY_POSITION = 5;
+    SET_COMBO_ERR_DUPLICATE_KEY_POSITION = 6;
+    SET_COMBO_ERR_INVALID_BEHAVIOR = 7;
+    SET_COMBO_ERR_INVALID_PARAMETERS = 8;
+}
+
+message SetComboResponse {
+    oneof result {
+        ComboSlot ok = 1;
+        SetComboErrorCode err = 2;
+    }
+}
+
+message ClearComboRequest {
+    uint32 index = 1;
+}
+
+enum ClearComboErrorCode {
+    CLEAR_COMBO_ERR_OK = 0;
+    CLEAR_COMBO_ERR_GENERIC = 1;
+    CLEAR_COMBO_ERR_INVALID_INDEX = 2;
+    // Stock (devicetree) combos can be edited but not removed.
+    CLEAR_COMBO_ERR_STOCK_COMBO = 3;
+}
+
+message ClearComboResponse {
+    oneof result {
+        bool ok = 1;
+        ClearComboErrorCode err = 2;
+    }
+}
