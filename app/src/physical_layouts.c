@@ -51,6 +51,14 @@ BUILD_ASSERT(
 
 #if USE_PHY_LAYOUTS
 
+// When more than one physical layout is present, the kscan driver of every non-selected layout
+// must be suspended via device PM, otherwise it keeps scanning and drives the (usually shared)
+// GPIO pins, breaking key detection for the selected layout. See
+// https://github.com/zmkfirmware/zmk/issues/2479.
+BUILD_ASSERT(DT_NUM_INST_STATUS_OKAY(DT_DRV_COMPAT) <= 1 || IS_ENABLED(CONFIG_PM_DEVICE),
+             "ISSUE FOUND: Multiple physical layouts require CONFIG_PM_DEVICE=y so that the kscan "
+             "driver for the inactive layouts can be suspended. Enable CONFIG_PM_DEVICE or reduce "
+             "the keyboard to a single physical layout.");
 #define ZKPA_INIT(i, n)                                                                            \
     (const struct zmk_key_physical_attrs) {                                                        \
         .width = (int16_t)(int32_t)DT_INST_PHA_BY_IDX(n, keys, i, width),                          \
