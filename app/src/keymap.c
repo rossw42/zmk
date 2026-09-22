@@ -84,6 +84,17 @@ KEYMAP_VAR(zmk_keymap, COND_CODE_1(IS_ENABLED(CONFIG_ZMK_KEYMAP_SETTINGS_STORAGE
 
 KEYMAP_VAR(zmk_stock_keymap, const, 0)
 
+// Each layer name is stored in a fixed size buffer. A `display-name` that is too long would
+// silently overflow into the next layer's buffer (and drop the NUL terminator), which then
+// surfaces as garbage layer names in ZMK Studio. Fail the build instead.
+#define ASSERT_LAYER_NAME_FITS(node)                                                               \
+    BUILD_ASSERT(sizeof(LAYER_NAME(node)) <= CONFIG_ZMK_KEYMAP_LAYER_NAME_MAX_LEN,                 \
+                 "Layer display-name is longer than CONFIG_ZMK_KEYMAP_LAYER_NAME_MAX_LEN - 1 "     \
+                 "characters. Shorten the name or increase CONFIG_ZMK_KEYMAP_LAYER_NAME_MAX_LEN. " \
+                 "Offending layer: " DT_NODE_FULL_NAME(node));
+
+ZMK_KEYMAP_LAYERS_FOREACH(ASSERT_LAYER_NAME_FITS)
+
 static char zmk_keymap_layer_names[ZMK_KEYMAP_LAYERS_LEN][CONFIG_ZMK_KEYMAP_LAYER_NAME_MAX_LEN] = {
     ZMK_KEYMAP_LAYERS_FOREACH_SEP(LAYER_NAME, (, ))};
 
@@ -857,6 +868,7 @@ static int keymap_handle_set(const char *name, size_t len, settings_read_cb read
 
         if (layer >= ZMK_KEYMAP_LAYERS_LEN) {
             LOG_WRN("Found layer name for invalid layer ID %d", layer);
+            return -EINVAL;
         }
 
         int ret = read_cb(cb_arg, zmk_keymap_layer_names[layer],

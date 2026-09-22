@@ -17,11 +17,11 @@ The `zmk,keymap` node itself has no properties. It should have one child node pe
 
 Each child node can have the following properties:
 
-| Property          | Type          | Description                                                          |
-| ----------------- | ------------- | -------------------------------------------------------------------- |
-| `display-name`    | string        | Name for the layer in ZMK Studio and on displays                     |
-| `bindings`        | phandle-array | List of [key behaviors](../keymaps/index.mdx#behaviors), one per key |
-| `sensor-bindings` | phandle-array | List of sensor behaviors, one per sensor                             |
+| Property          | Type          | Description                                                                                                                                                                                                          |
+| ----------------- | ------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `display-name`    | string        | Name for the layer in ZMK Studio and on displays. Limited to `CONFIG_ZMK_KEYMAP_LAYER_NAME_MAX_LEN - 1` characters (19 by default) when [ZMK Studio](../features/studio.md) is enabled; longer names fail the build. |
+| `bindings`        | phandle-array | List of [key behaviors](../keymaps/index.mdx#behaviors), one per key                                                                                                                                                 |
+| `sensor-bindings` | phandle-array | List of sensor behaviors, one per sensor                                                                                                                                                                             |
 
 Items for `bindings` must be listed in the order the keys are defined in the [keyboard scan configuration](kscan.md).
 

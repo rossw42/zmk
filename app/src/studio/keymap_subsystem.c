@@ -63,7 +63,15 @@ static bool encode_layer_name(pb_ostream_t *stream, const pb_field_t *field, voi
         return false;
     }
 
-    return pb_encode_string(stream, name, strlen(name));
+    // Layer names live in fixed size buffers; never read past the end of one, even if the
+    // terminator is missing. Bounded manually rather than via strnlen(), which is not part of
+    // ISO C and is not consistently available across the libcs ZMK builds against.
+    size_t len = 0;
+    while (len < CONFIG_ZMK_KEYMAP_LAYER_NAME_MAX_LEN && name[len] != '\0') {
+        len++;
+    }
+
+    return pb_encode_string(stream, name, len);
 }
 
 static bool encode_keymap_layers(pb_ostream_t *stream, const pb_field_t *field, void *const *arg) {
@@ -257,9 +265,7 @@ static bool encode_layout_name(pb_ostream_t *stream, const pb_field_t *field, vo
         return false;
     }
 
-    pb_encode_string(stream, layout->display_name, strlen(layout->display_name));
-
-    return true;
+    return pb_encode_string(stream, layout->display_name, strlen(layout->display_name));
 }
 
 static bool encode_layout_keys(pb_ostream_t *stream, const pb_field_t *field, void *const *arg) {
@@ -537,6 +543,11 @@ ZMK_RPC_SUBSYSTEM_HANDLER(keymap, remove_layer, ZMK_STUDIO_RPC_HANDLER_SECURED);
 ZMK_RPC_SUBSYSTEM_HANDLER(keymap, restore_layer, ZMK_STUDIO_RPC_HANDLER_SECURED);
 ZMK_RPC_SUBSYSTEM_HANDLER(keymap, set_layer_props, ZMK_STUDIO_RPC_HANDLER_SECURED);
 
-static int event_mapper(const zmk_event_t *eh, zmk_studio_Notification *n) { return 0; }
+// The keymap subsystem currently raises its notifications directly (see the
+// `unsaved_changes_status_changed` notifications above) rather than mapping ZMK events, so there
+// is nothing to map here yet. Returning a negative value is required: `rpc.c` treats any
+// non-negative return as "this mapper produced a notification" and would otherwise send an
+// empty notification for every event another mapper declined.
+static int event_mapper(const zmk_event_t *eh, zmk_studio_Notification *n) { return -ENOTSUP; }
 
 ZMK_RPC_EVENT_MAPPER(keymap, event_mapper);
